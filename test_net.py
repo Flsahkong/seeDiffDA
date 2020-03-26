@@ -15,9 +15,7 @@ import argparse
 import pprint
 import pdb
 import time
-
 import cv2
-
 import torch
 from torch.autograd import Variable
 import torch.nn as nn
@@ -30,9 +28,10 @@ from model.rpn.bbox_transform import clip_boxes
 from model.nms.nms_wrapper import nms
 from model.rpn.bbox_transform import bbox_transform_inv
 from model.utils.net_utils import save_net, load_net, vis_detections
-
 from model.faster_rcnn.vgg16 import vgg16
 from model.faster_rcnn.resnet import resnet
+
+import pdb
 
 try:
     xrange          # Python 2
@@ -109,6 +108,14 @@ if __name__ == '__main__':
       args.imdb_name = "voc_2007_trainval"
       args.imdbval_name = "voc_2007_test"
       args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]']
+  elif args.dataset == "CVWC2019":
+      args.imdb_name = "voc_2007_trainval"
+      args.imdbval_name = "CVWC2019_2007_val"
+      args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]']      
+  elif args.dataset == "species_2018":
+      args.imdb_name = "city_2007_trainval"
+      args.imdbval_name = "species_2018_2007_test"
+      args.set_cfgs = ['ANCHOR_SCALES', '[4,8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]']
   elif args.dataset == "pascal_voc_0712":
       args.imdb_name = "voc_2007_trainval+voc_2012_trainval"
       args.imdbval_name = "voc_2007_test"
@@ -125,6 +132,35 @@ if __name__ == '__main__':
       args.imdb_name = "vg_150-50-50_minitrain"
       args.imdbval_name = "vg_150-50-50_minival"
       args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]']
+  elif args.dataset == "fcity":
+      args.imdb_name = "fcity_2007_trainval"
+      args.imdbval_name = "fcity_2007_test"
+      args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]']
+  elif args.dataset == "city":
+      args.imdb_name = "city_2007_trainval"
+      args.imdbval_name = "city_2007_test"
+      args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]']
+  elif args.dataset == "kitti-voc":
+      args.imdb_name = "kitti-voc_2007_trainval"
+      args.imdbval_name = "kitti-voc_2007_test"
+      args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]']
+  elif args.dataset == "clipart":
+      args.imdb_name = "clipart_2007_trainval"
+      args.imdbval_name = "clipart_2007_test"
+      args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20']
+  elif args.dataset == "comic":
+      args.imdb_name = "comic_2007_trainval"
+      args.imdbval_name = "comic_2007_test"
+      args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20']
+  elif args.dataset == "watercolor":
+      args.imdb_name = "watercolor_2007_trainval"
+      args.imdbval_name = "watercolor_2007_test"
+      args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20']
+  elif args.dataset == "species_2018":
+      args.imdb_name = "species_2018_2007_trainval"
+      args.imdbval_name = "species_2018_2007_test"
+      args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20']
+
 
   args.cfg_file = "cfgs/{}_ls.yml".format(args.net) if args.large_scale else "cfgs/{}.yml".format(args.net)
 
@@ -225,6 +261,30 @@ if __name__ == '__main__':
 
   fasterRCNN.eval()
   empty_array = np.transpose(np.array([[],[],[],[],[]]), (1,0))
+
+  def get_truth_labels(annopath):
+      import xml.etree.ElementTree as ET
+      tree = ET.parse(annopath)
+      objects = []
+      for obj in tree.findall('object'):
+          obj_struct = {}
+          obj_struct['name'] = obj.find('name').text
+          #obj_struct['pose'] = obj.find('pose').text
+          #obj_struct['truncated'] = int(obj.find('truncated').text)
+          try:
+            obj_struct['difficult'] = int(obj.find('difficult').text)
+          except:
+            obj_struct['difficult'] = 0
+          bbox = obj.find('bndbox')
+          obj_struct['bbox'] = [int(float(bbox.find('xmin').text)),
+                                int(float(bbox.find('ymin').text)),
+                                int(float(bbox.find('xmax').text)),
+                                int(float(bbox.find('ymax').text))]
+          objects.append(obj_struct)
+      # Make separate dicts for categories.
+      return objects
+
+
   for i in range(num_images):
 
       data = next(data_iter)
@@ -237,7 +297,7 @@ if __name__ == '__main__':
       rois, cls_prob, bbox_pred, \
       rpn_loss_cls, rpn_loss_box, \
       RCNN_loss_cls, RCNN_loss_bbox, \
-      rois_label = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
+      rois_label, _1, _2 = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
 
       scores = cls_prob.data
       boxes = rois.data[:, :, 1:5]
@@ -273,6 +333,16 @@ if __name__ == '__main__':
       if vis:
           im = cv2.imread(imdb.image_path_at(i))
           im2show = np.copy(im)
+
+      """
+      annopath = imdb.image_path_at(i)
+      annopath = annopath[:-19]+"Annotations"+annopath[len(annopath)-9:-3]+"xml"
+      print(annopath)
+      ground_truths = get_truth_labels(annopath)
+      print(ground_truths)
+      input("continue")
+      """
+
       for j in xrange(1, imdb.num_classes):
           inds = torch.nonzero(scores[:,j]>thresh).view(-1)
           # if there is det
